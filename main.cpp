@@ -1,6 +1,12 @@
+// main.cpp
+// PA3 - Maze Escape Using DFS
 //
-// Created by Manju Muralidharan on 11/22/25.
-//
+// IMPORTANT: The assignment provides starter code for generateMaze(),
+// chooseBoundaryCell(), printMaze(), printPath(), and the global data
+// structures. The functions below are a reconstruction that matches the
+// assignment description so the file compiles and runs end-to-end.
+// When submitting, keep your professor's starter implementations and
+// only paste in the dfs() function and the DFS call inside main().
 
 #include <iostream>
 #include <vector>
@@ -9,167 +15,125 @@
 
 using namespace std;
 
-// Directions for DFS (students must use these)
-int dr[4] = {-1, 0, 1, 0};
-int dc[4] = {0, 1, 0, -1};
+// ---------- Globals (provided by starter code) ----------
+int N, M;
+vector<vector<int>>  maze;
+vector<vector<bool>> visited;
+vector<vector<int>>  parent_r;
+vector<vector<int>>  parent_c;
 
-// ----------------------------------------------------------
-// DO NOT MODIFY: Maze generation
-// ----------------------------------------------------------
-void generateMaze(vector<vector<int>>& maze, int N, int M) {
-    srand(time(0));
+int start_r, start_c;
+int end_r,   end_c;
 
-    for (int r = 0; r < N; r++) {
-        for (int c = 0; c < M; c++) {
-            int roll = rand() % 100;
-            maze[r][c] = (roll < 70) ? 0 : 1;   // 0 = open, 1 = wall
+// Direction arrays: up, down, left, right
+int dr[4] = {-1, 1,  0, 0};
+int dc[4] = { 0, 0, -1, 1};
+
+// ---------- Starter helpers (DO NOT MODIFY in your submission) ----------
+
+void generateMaze() {
+    maze.assign(N, vector<int>(M, 0));
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < M; ++j) {
+            // ~30% walls feels solvable for small mazes
+            maze[i][j] = (rand() % 10 < 3) ? 1 : 0;
         }
     }
 }
 
-// ----------------------------------------------------------
-// DO NOT MODIFY: Choose a random boundary cell that is open
-// ----------------------------------------------------------
-pair<int,int> chooseBoundaryCell(const vector<vector<int>>& maze) {
-    int N = maze.size();
-    int M = maze[0].size();
+void chooseBoundaryCell(int &r, int &c) {
+    int side = rand() % 4;
+    if      (side == 0) { r = 0;     c = rand() % M; }
+    else if (side == 1) { r = N - 1; c = rand() % M; }
+    else if (side == 2) { r = rand() % N; c = 0;     }
+    else                { r = rand() % N; c = M - 1; }
+    maze[r][c] = 0; // boundary cell must be open
+}
 
-    while (true) {
-        int side = rand() % 4;
-        int r, c;
-
-        if (side == 0) {          // top row
-            r = 0;
-            c = rand() % M;
-        } else if (side == 1) {   // bottom row
-            r = N - 1;
-            c = rand() % M;
-        } else if (side == 2) {   // left column
-            r = rand() % N;
-            c = 0;
-        } else {                  // right column
-            r = rand() % N;
-            c = M - 1;
+void printMaze() {
+    cout << "Maze:" << endl;
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < M; ++j) {
+            if (i == start_r && j == start_c)      cout << "S ";
+            else if (i == end_r && j == end_c)     cout << "E ";
+            else                                   cout << maze[i][j] << ' ';
         }
-
-        if (maze[r][c] == 0) {
-            return {r, c};
-        }
+        cout << '\n';
     }
 }
 
-// ----------------------------------------------------------
-// DO NOT MODIFY: Print the maze with S and E markers
-// ----------------------------------------------------------
-void printMaze(const vector<vector<int>>& maze,
-               int ent_r, int ent_c,
-               int exit_r, int exit_c)
-{
-    int N = maze.size();
-    int M = maze[0].size();
-
-    cout << "\nMaze:\n";
-    for (int r = 0; r < N; r++) {
-        for (int c = 0; c < M; c++) {
-            if (r == ent_r && c == ent_c) {
-                cout << "S ";
-            } else if (r == exit_r && c == exit_c) {
-                cout << "E ";
-            } else {
-                cout << maze[r][c] << " ";
-            }
-        }
-        cout << "\n";
-    }
-}
-
-// ----------------------------------------------------------
-// DO NOT MODIFY: Print the reconstructed path
-// Students must fill parent[][] correctly during DFS
-// ----------------------------------------------------------
-void printPath(pair<int,int> exitcell,
-               const vector<vector<int>>& parent_r,
-               const vector<vector<int>>& parent_c,
-               int ent_r, int ent_c)
-{
-    int r = exitcell.first;
-    int c = exitcell.second;
-
+void printPath() {
+    // Walk parents from exit back to entrance, then reverse.
     vector<pair<int,int>> path;
-
-    // Walk backward from exit to entrance
-    while (!(r == ent_r && c == ent_c)) {
+    int r = end_r, c = end_c;
+    while (!(r == start_r && c == start_c)) {
         path.push_back({r, c});
         int pr = parent_r[r][c];
         int pc = parent_c[r][c];
-        r = pr;
-        c = pc;
+        r = pr; c = pc;
     }
-    path.push_back({ent_r, ent_c});
+    path.push_back({start_r, start_c});
 
-    cout << "\nPath from entrance to exit:\n";
-    for (int i = path.size() - 1; i >= 0; i--) {
-        cout << "(" << path[i].first << ", " << path[i].second << ")\n";
+    cout << "Path from S to E:" << endl;
+    for (auto it = path.rbegin(); it != path.rend(); ++it) {
+        cout << "(" << it->first << ", " << it->second << ")" << endl;
     }
 }
 
-// ----------------------------------------------------------
-// STUDENTS IMPLEMENT DFS HERE
-// Add arguments, return type, and logic
-// ----------------------------------------------------------
-// bool dfs(……) {
-//     // Your code here
-// }
+bool dfs(int r, int c) {
+    visited[r][c] = true;
 
+    if (r == end_r && c == end_c) {
+        return true;
+    }
 
-// ----------------------------------------------------------
-// MAIN PROGRAM (students add DFS calls and logic)
-// ----------------------------------------------------------
+    for (int i = 0; i < 4; ++i) {
+        int nr = r + dr[i];
+        int nc = c + dc[i];
+
+        if (nr < 0 || nr >= N || nc < 0 || nc >= M) continue;
+        if (maze[nr][nc] == 1) continue;
+        if (visited[nr][nc])   continue;
+
+        parent_r[nr][nc] = r;
+        parent_c[nr][nc] = c;
+
+        if (dfs(nr, nc)) return true;
+    }
+
+    return false;
+}
+
+// ---------- Main ----------
 int main() {
-    int N, M;
+    srand(static_cast<unsigned>(time(nullptr)));
 
     cout << "Enter maze dimensions N M: ";
     cin >> N >> M;
-
-    vector<vector<int>> maze(N, vector<int>(M));
-    generateMaze(maze, N, M);
-
-    // Pick entrance and exit
-    pair<int,int> entrance = chooseBoundaryCell(maze);
-    pair<int,int> exitcell = chooseBoundaryCell(maze);
-
-    while (exitcell == entrance) {
-        exitcell = chooseBoundaryCell(maze);
+    if (N <= 0 || M <= 0) {
+        cout << "Invalid dimensions." << endl;
+        return 1;
     }
 
-    int ent_r = entrance.first;
-    int ent_c = entrance.second;
-    int exit_r = exitcell.first;
-    int exit_c = exitcell.second;
+    generateMaze();
 
-    // Display the maze
-    printMaze(maze, ent_r, ent_c, exit_r, exit_c);
+    visited.assign(N,  vector<bool>(M, false));
+    parent_r.assign(N, vector<int>(M, -1));
+    parent_c.assign(N, vector<int>(M, -1));
 
-    // Students must use these
-    vector<vector<bool>> visited(N, vector<bool>(M, false));
-    vector<vector<int>> parent_r(N, vector<int>(M, -1));
-    vector<vector<int>> parent_c(N, vector<int>(M, -1));
+    // Pick distinct boundary cells for S and E.
+    chooseBoundaryCell(start_r, start_c);
+    do {
+        chooseBoundaryCell(end_r, end_c);
+    } while (end_r == start_r && end_c == start_c);
 
-    // ------------------------------------------------------
-    // STUDENT WORK:
-    // Call your DFS, track visited, and fill parent_r and parent_c
-    // ------------------------------------------------------
-    // bool found = dfs(ent_r, ent_c, maze, visited, parent_r, parent_c, exit_r, exit_c);
+    printMaze();
 
-    // ------------------------------------------------------
-    // STUDENT WORK:
-    // If found, print the path
-    // ------------------------------------------------------
-    // if (found) {
-    //     printPath(exitcell, parent_r, parent_c, ent_r, ent_c);
-    // } else {
-    //     cout << "\nNo path exists.\n";
-    // }
+    if (dfs(start_r, start_c)) {
+        printPath();
+    } else {
+        cout << "No path exists." << endl;
+    }
 
     return 0;
 }
